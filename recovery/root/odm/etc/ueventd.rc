@@ -31,6 +31,8 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # Base path for all VM's
+firmware_directories /vendor/vm-system/
+# sm8750 keeps its VM images here
 firmware_directories /product/vm-system/
 
 # TrustedUI VM
@@ -65,6 +67,9 @@ external_firmware_handler /devices/platform/soc/soc:gh-secure-vm-loader@1/firmwa
 external_firmware_handler /devices/platform/soc/soc:gh-secure-vm-loader@1/firmware/oemvm.b04 system "/vendor/bin/vmmgr -r"
 external_firmware_handler /devices/platform/soc/soc:gh-secure-vm-loader@1/firmware/oemvm.b05 system "/vendor/bin/vmmgr -r"
 
+#launch boost
+/dev/iorap_dev  0660  system  system
+
 # xiaomi display feature
 subsystem mi_display
     devname uevent_devpath
@@ -77,5 +82,5 @@ subsystem mi_display
 /dev/fm-ntag              0660   nfc        nfc
 /dev/nxp-ntag             0660   nfc        nfc
 
- hang_task
+# hang_task
 /dev/Monitor_Hang	0660	system	system

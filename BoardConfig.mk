@@ -83,7 +83,7 @@ BOARD_QTI_DYNAMIC_PARTITIONS_SIZE := $(shell echo $$(($(BOARD_SUPER_PARTITION_SI
 BOARD_QTI_DYNAMIC_PARTITIONS_PARTITION_LIST := system system_ext product vendor vendor_dlkm odm system_dlkm
 
 # System as root
-BOARD_ROOT_EXTRA_FOLDERS := firmware persist
+BOARD_ROOT_EXTRA_FOLDERS := bluetooth dsp firmware persist soccp
 
 # File systems
 TARGET_USERIMAGES_USE_EXT4 := true
@@ -94,7 +94,20 @@ TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
 
 # Recovery
 TARGET_RECOVERY_PIXEL_FORMAT := RGBX_8888
-TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
+# One platform per image: YARP_PLATFORM=sm8850 builds the SM8850 one.
+YARP_PLATFORM ?= sm8750
+YARP_DROP_PLATFORM := $(filter-out $(YARP_PLATFORM),sm8750 sm8850)
+ifneq ($(words $(YARP_PLATFORM)) $(words $(YARP_DROP_PLATFORM)),1 1)
+$(error YARP_PLATFORM must be sm8750 or sm8850, got '$(YARP_PLATFORM)')
+endif
+TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/platform/$(YARP_PLATFORM)/overlay/system/etc/recovery.fstab
+# Drop the other platform's layer and SKU entries, then list the ramdisk again
+# the way build/make/core/Makefile does. A define, so it expands late (the root
+# out dir is not set yet here) and ends in a newline for vendor/twrp's depmod lines.
+define BOARD_RECOVERY_IMAGE_PREPARE
+cd $(TARGET_RECOVERY_ROOT_OUT) && test -d platform/sku && rm -rf platform/$(YARP_DROP_PLATFORM) && grep -l "/platform/$(YARP_DROP_PLATFORM)/" platform/sku/*.rc | xargs -r rm -f && find . | sed "s/.\///" | sed "/lib\/modules\//d" > ramdisk-files.txt && find -type f | sed "s/.\/ramdisk-files.sha256sum//" | sed "/lib\/modules/d" | sed "/prop.default/d" | sed "/ld\.config\.txt/d" | xargs sha256sum > ramdisk-files.sha256sum
+
+endef
 
 # Crypto
 TW_INCLUDE_CRYPTO := true
@@ -123,8 +136,9 @@ TWRP_INCLUDE_LOGCAT := true
 TARGET_RECOVERY_DEVICE_MODULES += debuggerd
 RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/debuggerd
 TARGET_RECOVERY_DEVICE_MODULES += strace
+# Gives the SM8850 vibrator HAL the SM8750 instance name too (vibrator_alias/).
+TARGET_RECOVERY_DEVICE_MODULES += libvibrator_alias
 RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/strace
-TARGET_RECOVERY_DEVICE_MODULES += prebuilt
 # TW_INCLUDE_WIFI only compiles the WLAN pages in; the daemon the pages talk to
 # is this module (external/wpa_supplicant_8, stem wpa_supplicant), and nothing
 # pulls it into the ramdisk unless it is named here.
@@ -156,8 +170,9 @@ TW_SUPPORT_INPUT_AIDL_HAPTICS := true
 TW_SUPPORT_INPUT_AIDL_HAPTICS_FQNAME := "IVibrator/vibratorfeature"
 TW_SUPPORT_INPUT_AIDL_HAPTICS_FIX_OFF := true
 TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
-TW_LOAD_VENDOR_MODULES := "adsp_loader_dlkm.ko rproc_qcom_common.ko q6_dlkm.ko qcom_q6v5.ko qcom_q6v5_pas.ko qcom_sysmon.ko synaptics_tcm2.ko goodix_core.ko nt36532_touch.ko focaltech_touch.ko xiaomi_touch.ko nxp-nci.ko stm_st54se_gpio.ko stm_nfc_i2c.ko qcom-hv-haptics.ko cs40l26-i2c.ko cnss_prealloc.ko cnss_nl.ko wlan_firmware_service.ko cnss_plat_ipc_qmi_svc.ko cnss_utils.ko cnss2.ko gsim.ko rmnet_mem.ko ipam.ko"
+TW_LOAD_VENDOR_MODULES := "adsp_loader_dlkm.ko rproc_qcom_common.ko q6_dlkm.ko qcom_q6v5.ko qcom_q6v5_pas.ko qcom_sysmon.ko synaptics_tcm2.ko goodix_core.ko nt36532_touch.ko focaltech_touch.ko xiaomi_touch.ko nxp-nci.ko stm_st54se_gpio.ko stm_nfc_i2c.ko qcom-hv-haptics.ko cs40l26-i2c.ko nt38773_touch.ko focaltech_touch_3683.ko focaltech_touch_3685g.ko focaltech_touch_3685g_1.ko cnss_prealloc.ko cnss_nl.ko wlan_firmware_service.ko cnss_plat_ipc_qmi_svc.ko cnss_utils.ko cnss2.ko gsim.ko rmnet_mem.ko ipam.ko"
 TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
 TW_LOAD_PREBUILT_MODULES_AT_FIRST := true
-TW_CUSTOM_CPU_TEMP_PATH := "/sys/class/thermal/thermal_zone1/temp" # CPU-0-0-0
+# Linked to the running platform's CPU-0-0-0 zone by platform/<p>/early.sh.
+TW_CUSTOM_CPU_TEMP_PATH := "/dev/twrp_cpu_temp"
 TW_BACKUP_EXCLUSIONS := /data/fonts,/data/adb/ap,/data/adb/ksu

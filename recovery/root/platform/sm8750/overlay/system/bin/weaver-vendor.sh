@@ -1,13 +1,9 @@
 #!/system/bin/sh
-# servicemanager and keystore2 both read the device VINTF manifest within the
-# first milliseconds of the init trigger, and each one caches it for its own
-# lifetime. The manifest has to be correct before either of them starts.
-# variant-script runs at post-fs, which is 7 ms too late: on piano keystore2
-# had already read the strongbox declarations, and it then waited five seconds
-# for services that a Thales device never starts. init runs this script with
-# exec, so it completes before servicemanager.
-#
-# This is also the one place that names the weaver vendor of each SKU.
+# Names the weaver vendor of each SKU in ro.twrp.weaver. init runs it with exec
+# at init, so the property is there before any trigger that tests it.
+# StrongBox is not started in recovery: its applet only answers once the
+# bootloader has sent it the boot state, which a recovery boot never does, and
+# keystore2 then retries the shared secret every second for good.
 
 vendor=""
 case "$(getprop ro.boot.hardware.sku)" in
@@ -28,12 +24,4 @@ esac
 
 if [ -n "${vendor}" ]; then
     setprop ro.twrp.weaver "${vendor}"
-fi
-
-# Only the NXP keymint service provides IKeyMintDevice/strongbox,
-# IRemotelyProvisionedComponent/strongbox and ISharedSecret/strongbox. An
-# unknown SKU starts no strongbox service either, so it drops them too.
-if [ "${vendor}" != "nxp" ]; then
-    rm -f /odm/etc/vintf/manifest/android.hardware.security.keymint-service.strongbox.xml
-    rm -f /odm/etc/vintf/manifest/android.hardware.security.sharedsecret-service.strongbox.xml
 fi

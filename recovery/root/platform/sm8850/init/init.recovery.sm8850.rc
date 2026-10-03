@@ -54,7 +54,8 @@ on fs
     start vendor.qseecomd
 
 on post-fs
-    start odm.variant-script
+    # Blocks until the props are set: recovery starts at boot and reads the model at once.
+    exec_start odm.variant-script
 
 on boot
     setprop sys.usb.config adb

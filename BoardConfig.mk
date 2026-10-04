@@ -101,11 +101,14 @@ ifneq ($(words $(YARP_PLATFORM)) $(words $(YARP_DROP_PLATFORM)),1 1)
 $(error YARP_PLATFORM must be sm8750 or sm8850, got '$(YARP_PLATFORM)')
 endif
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery/root/platform/$(YARP_PLATFORM)/overlay/system/etc/recovery.fstab
-# Drop the other platform's layer and SKU entries, then list the ramdisk again
-# the way build/make/core/Makefile does. A define, so it expands late (the root
-# out dir is not set yet here) and ends in a newline for vendor/twrp's depmod lines.
+# Drop the other platform's layer and SKU entries, move the kept layer's lib/
+# into the root (drivers that probe in first stage read /lib/firmware before
+# early.sh links the layer), then list the ramdisk again the way
+# build/make/core/Makefile does. A define, so it expands late (the root out dir
+# is not set yet here) and ends in a newline for vendor/twrp's depmod lines.
+YARP_LAYER_LIB := platform/$(YARP_PLATFORM)/overlay/lib
 define BOARD_RECOVERY_IMAGE_PREPARE
-cd $(TARGET_RECOVERY_ROOT_OUT) && test -d platform/sku && rm -rf platform/$(YARP_DROP_PLATFORM) && grep -l "/platform/$(YARP_DROP_PLATFORM)/" platform/sku/*.rc | xargs -r rm -f && find . | sed "s/.\///" | sed "/lib\/modules\//d" > ramdisk-files.txt && find -type f | sed "s/.\/ramdisk-files.sha256sum//" | sed "/lib\/modules/d" | sed "/prop.default/d" | sed "/ld\.config\.txt/d" | xargs sha256sum > ramdisk-files.sha256sum
+cd $(TARGET_RECOVERY_ROOT_OUT) && test -d platform/sku && rm -rf platform/$(YARP_DROP_PLATFORM) && grep -l "/platform/$(YARP_DROP_PLATFORM)/" platform/sku/*.rc | xargs -r rm -f && { test ! -d $(YARP_LAYER_LIB) || { mkdir -p lib && cp -a $(YARP_LAYER_LIB)/. lib/ && rm -rf $(YARP_LAYER_LIB); }; } && find . | sed "s/.\///" | sed "/lib\/modules\//d" > ramdisk-files.txt && find -type f | sed "s/.\/ramdisk-files.sha256sum//" | sed "/lib\/modules/d" | sed "/prop.default/d" | sed "/ld\.config\.txt/d" | xargs sha256sum > ramdisk-files.sha256sum
 
 endef
 

@@ -38,6 +38,8 @@ on init
 
 on property:ro.boot.hardware.sku=piano
     setprop persist.twrp.rotation 270
+    # Its touch scans in step with the panel's vsync, so keep the bootloader's mode.
+    setprop twrp.drm.fast_mode false
 
 on early-fs
     write /proc/sys/walt/sched_lib_name "recovery,magiskboot,Updater,updater,update_engine_sideload"

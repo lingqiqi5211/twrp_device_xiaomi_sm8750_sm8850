@@ -10,7 +10,9 @@ One tree serves both platforms; each image carries one of them and serves every 
 - `/init.recovery.qcom.rc` imports `/platform/sku/${ro.boot.hardware.sku}.rc`,
   which pulls in that SKU's platform. At early-init the platform's
   `early.sh` hard links its files into place and sets the platform
-  properties.
+  properties. The layer's `lib/` is the exception: it holds firmware for
+  drivers that probe in first stage, so the build puts it straight into the
+  ramdisk's `/lib`.
 - Within a platform, `variant-script.sh` reads `ro.boot.hardware.sku` and sets
   the per-device properties.
 

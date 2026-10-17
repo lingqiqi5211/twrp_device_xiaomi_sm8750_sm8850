@@ -37,33 +37,55 @@ The WLAN chip is read from the kernel's cnss device tree node.
 never finds one and nothing can reach an applet. Its weaver slots live in the
 TEE and Xiaomi's own `android.hardware.weaver` is the service that reads them.
 
-`piano` has a landscape panel, so init sets persist.twrp.rotation for it and
-TWRP scales the portrait theme onto the rotated canvas. TW_ROTATION is only
-the compile time default; the property overrides it per device.
+`piano` uses the panel's reported orientation; the device tree does not force
+`persist.twrp.rotation`.
 
 ### SM8850
 
-| SKU | Device |
-| --- | --- |
-| `pudding` | Xiaomi 17 |
-| `pandora` | Xiaomi 17 Pro |
-| `popsicle` | Xiaomi 17 Pro Max \* |
-| `nezha` | Xiaomi 17 Ultra |
-| `byron` | Xiaomi 17 Max |
-| `myron` | REDMI K90 Pro Max / POCO F8 Ultra |
-| `athens` | REDMI K100 Pro / POCO F9 Pro |
-| `songyuan` | REDMI K100 Pro Max / POCO F9 Ultra |
+| SKU | Device | Weaver |
+| --- | --- | --- |
+| `pudding` | Xiaomi 17 | Thales eSE |
+| `pandora` | Xiaomi 17 Pro | NXP eSE |
+| `popsicle` | Xiaomi 17 Pro Max \* | NXP eSE |
+| `nezha` | Xiaomi 17 Ultra | Goodix / Thales eSE (detected) |
+| `byron` | Xiaomi 17 Max | NXP eSE |
+| `myron` | REDMI K90 Pro Max / POCO F8 Ultra | NXP eSE |
+| `athens` | REDMI K100 Pro / POCO F9 Pro | NXP eSE |
+| `songyuan` | REDMI K100 Pro Max / POCO F9 Ultra | Thales eSE |
 
 \* Primary SM8850 test device upstream
+
+`nezha` has two secure-element variants. After the variant files are copied
+and kernel modules are loaded, init runs
+[`weaver-vendor.sh`](recovery/root/platform/sm8850/overlay/system/bin/weaver-vendor.sh).
+It waits up to about five seconds for `/dev/st54spi_gpio`: if present it sets
+`ro.twrp.weaver=thales`; otherwise it selects `goodix`.
+[`init.recovery.sm8850.rc`](recovery/root/platform/sm8850/init/init.recovery.sm8850.rc)
+then starts the matching services. The SKU script does not force a vendor
+for `nezha`.
+
+To check the selection in Recovery:
+
+```sh
+adb shell getprop ro.twrp.weaver
+adb shell 'grep "weaver-vendor.sh: nezha selected" /tmp/recovery.log'
+```
+
+This is hardware selection, not a fallback after a rejected password.
+Both hardware variants still need device-specific decryption validation.
 
 TWRP's haptics instance is fixed at build time to the SM8750 one
 (`IVibrator/vibratorfeature`). The SM8850 service registers
 `IVibrator/default`, so `vibrator_alias/` is preloaded into it and registers
 the same binder under the SM8750 name as well.
 
-The WLAN page is shown on both platforms and only works on SM8750.
+`TW_INCLUDE_WIFI` defaults to `true`; this tree provides the WLAN stack for
+SM8750 only.
+SM8850 test releases disable the WLAN UI and exclude the supplicant modules
+with a local build override; that override is not part of this tree.
 
-Tested on hardware with SM8750-only builds: `warsaw`, `piano`.
+The device tables describe the configured variants, not a complete test
+matrix. Hardware testing on this branch includes `warsaw` and `piano`.
 
 ## Features
 
@@ -76,15 +98,37 @@ Tested on hardware with SM8750-only builds: `warsaw`, `piano`.
 - [X] Sideload
 - [X] USB-OTG
 - [X] Vibrator
-- [X] WLAN (SM8750)
+- [X] WLAN vendor stack (SM8750)
 
 ## Build it yourself
-* [TWRP-Test/platform_manifest_twrp_aosp](https://github.com/TWRP-Test/platform_manifest_twrp_aosp)
 
-```
+Use [TWRP-Test/platform_manifest_twrp_aosp](https://github.com/TWRP-Test/platform_manifest_twrp_aosp)
+and place this branch at `device/xiaomi/sm8750`:
+
+```sh
+git clone -b twrp-16.0 https://github.com/lingqiqi5211/twrp_device_xiaomi_sm8750_sm8850.git device/xiaomi/sm8750
+source build/envsetup.sh
+export YARP_PLATFORM=sm8750
 lunch twrp_sm8750-bp2a-eng
-mka recoveryimage                         # SM8750 image
-YARP_PLATFORM=sm8850 mka recoveryimage    # SM8850 image
+mka recoveryimage
 ```
 
-The two share one Soong analysis; only the ramdisk differs.
+Both platforms use the same lunch target. To build SM8850, select it before
+lunch. When reusing an output directory from the other platform, clean the
+installed files before building to avoid mixing platform contents:
+
+```sh
+export YARP_PLATFORM=sm8850
+lunch twrp_sm8750-bp2a-eng
+mka installclean
+mka recoveryimage
+```
+
+`YARP_PLATFORM` defaults to `sm8750` and accepts only `sm8750` or `sm8850`.
+Packaging selects that platform's fstab, keeps its platform layer and SKU
+imports, and removes the other platform. Build separate images for the two
+platforms; a single image does not serve both.
+
+The product name remains `sm8750` in either case, so the image is written to
+`${OUT_DIR:-out}/target/product/sm8750/recovery.img`. Copy it to a filename
+that identifies the selected platform before switching builds.

@@ -58,8 +58,14 @@ TEE and Xiaomi's own `android.hardware.weaver` is the service that reads them.
 `nezha` has two secure-element variants. After the variant files are copied
 and kernel modules are loaded, init runs
 [`weaver-vendor.sh`](recovery/root/platform/sm8850/overlay/system/bin/weaver-vendor.sh).
-It waits up to about five seconds for `/dev/st54spi_gpio`: if present it sets
-`ro.twrp.weaver=thales`; otherwise it selects `goodix`.
+It follows the stock `ro.special_edition` property: `true` selects Goodix,
+`false` selects Thales. If Recovery does not have that property, the script
+mounts the installed ROM's ODM read-only at a separate temporary mountpoint
+and reads its `build.prop` imports to resolve the edition. It does not keep
+a hardware-version table or use `/dev/st54spi_gpio` to select a vendor.
+An unreadable or unsupported ROM configuration leaves the vendor unselected
+and logs the reason. A successfully read stock configuration without the
+edition property retains the stock Thales default.
 [`init.recovery.sm8850.rc`](recovery/root/platform/sm8850/init/init.recovery.sm8850.rc)
 then starts the matching services. The SKU script does not force a vendor
 for `nezha`.
@@ -68,7 +74,7 @@ To check the selection in Recovery:
 
 ```sh
 adb shell getprop ro.twrp.weaver
-adb shell 'grep "weaver-vendor.sh: nezha selected" /tmp/recovery.log'
+adb shell 'grep "weaver-vendor.sh:" /tmp/recovery.log'
 ```
 
 This is hardware selection, not a fallback after a rejected password.

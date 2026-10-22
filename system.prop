@@ -6,9 +6,9 @@ ro.boot.dynamic_partitions=true
 vendor.gatekeeper.disable_spu=true
 vendor.gatekeeper.is_security_level_spu=0
 
-# Display: the bootloader hands the panel over at 60 Hz; switch to its
-# fastest mode once recovery has taken it over.
-twrp.drm.fast_mode=true
+# Display: use 120 Hz from the first frame on both platforms.
+twrp.drm.refresh_rate=120
+twrp.drm.fast_mode=false
 
 # Battery Property
 ro.charger.enable_suspend=1

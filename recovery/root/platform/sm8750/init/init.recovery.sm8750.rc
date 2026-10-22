@@ -37,6 +37,8 @@ on init
     start odm.wait-vendor
 
 on init && property:ro.boot.hardware.sku=piano
+    # Keep the panel at 120 Hz; switching to 144 Hz during takeover can blank it.
+    setprop twrp.drm.refresh_rate 120
     # The touch sensor axes differ from the panel's native scanout axes.
     setprop ro.twrp.touch.rotation 270
 

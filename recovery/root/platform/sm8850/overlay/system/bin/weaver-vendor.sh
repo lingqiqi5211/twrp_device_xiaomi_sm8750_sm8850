@@ -9,7 +9,29 @@ log() {
 edition=$(getprop ro.special_edition)
 source=ro.special_edition
 if [ -z "$edition" ]; then
-    block=/dev/block/bootdevice/by-name/odm
+    # ODM is a logical, slotted partition on SM8850. modules.loaded is
+    # published after recovery creates its mapper nodes; never guess the slot.
+    suffix=$(getprop ro.boot.slot_suffix)
+    if [ -z "$suffix" ]; then
+        slot=$(getprop ro.boot.slot)
+        [ -z "$slot" ] || suffix="_$slot"
+    fi
+    case "$suffix" in
+        _a|_b) ;;
+        *) log "missing or invalid boot slot; vendor not selected"; exit 1 ;;
+    esac
+    block=""
+    for candidate in "/dev/block/mapper/odm$suffix" "/dev/block/bootdevice/by-name/odm$suffix"; do
+        if [ -b "$candidate" ]; then
+            block="$candidate"
+            break
+        fi
+    done
+    [ -n "$block" ] || {
+        log "no ODM block device for slot $suffix; vendor not selected"
+        exit 1
+    }
+    log "reading ROM properties from $block"
     rom=/mnt/nezha-weaver-odm
     sku=$(getprop ro.boot.product.hardware.sku)
     hw=$(getprop ro.boot.hwversion)

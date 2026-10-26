@@ -51,6 +51,8 @@ on fs
     mount ext4 /dev/block/bootdevice/by-name/persist /persist noatime nosuid nodev barrier=1
     mount none /persist /mnt/vendor/persist bind
     install_keyring
+
+on property:twrp.storage.ready=1
     start vendor.qseecomd
 
 on post-fs
@@ -75,13 +77,17 @@ on property:twrp.modules.loaded=true
 
 on property:twrp.adsp.ready=true && property:vendor.sys.listeners.registered=true
     start vendor.health-default
+
+# storage.ready marks startup mount cleanup, before decryption.
+# The eSE HAL also needs ADSP and qseecomd listeners.
+on property:twrp.adsp.ready=true && property:vendor.sys.listeners.registered=true && property:twrp.storage.ready=1
     start vendor.secure_element
 
-on property:twrp.variant.files_copied=1
+on property:twrp.variant.files_copied=1 && property:twrp.storage.ready=1
     start odm.vibratorfeature-hal-service
     start odm.touch_report
 
-on property:twrp.variant.files_copied=1 && property:twrp.modules.loaded=true
+on property:twrp.variant.files_copied=1 && property:twrp.modules.loaded=true && property:twrp.storage.ready=1
     start vendor.weaver-detect
 
 service vendor.weaver-detect /system/bin/sh /system/bin/weaver-vendor.sh
@@ -91,13 +97,13 @@ service vendor.weaver-detect /system/bin/sh /system/bin/weaver-vendor.sh
     oneshot
     seclabel u:r:recovery:s0
 
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=nxp
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=nxp && property:twrp.storage.ready=1
     start odm.weaver_nxp
 
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=thales
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=thales && property:twrp.storage.ready=1
     start odm.weaver_hal_service
 
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=goodix
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=goodix && property:twrp.storage.ready=1
     start odm.secure_element_hal_service
     start odm.goodix_weaver_hal_service
 

@@ -44,8 +44,7 @@ fi
 
 # Exit codes:
 # 0 Success
-# 1 Unknown encryption type
-# 2 Temp Mount Failure
+# 2 Preparation or service startup failure
 
 # Function for logging to the recovery log
 log_print() {
@@ -125,10 +124,13 @@ finish() {
 			fi
 		fi
 	fi
-	start_crypto_services
+	if ! start_crypto_services; then
+		log_print 0 "KeyMint did not start. Decryption preparation incomplete."
+		exit 2
+	fi
 	setprop crypto.ready 1
 	log_print 1 "crypto.ready=$(getprop crypto.ready)"
-	log_print 1 "Script complete. Device ready for decryption."
+	log_print 1 "Version preparation complete. KeyMint process started."
 	exit 0
 }
 
@@ -150,7 +152,6 @@ finish_error() {
 		fi
 	fi
 	start_crypto_services
-	setprop crypto.ready 1
 	log_print 0 "Script run incomplete. Device may not be ready for decryption."
 	exit 2
 }
@@ -211,8 +212,10 @@ check_encrypt() {
 	elif [ "$encrypt_type" = "block" ]; then
 		log_print 1 "Full Device Encryption (FDE) found."
 	else
-		log_print 0 "Unknown decryption type or type not set. Exiting script."
-		exit 1
+		# ProcessFstab may still be discovering /data when modules.loaded starts
+		# this script. Version preparation and KeyMint are needed regardless of
+		# whether the encryption type has been published yet.
+		log_print 1 "Encryption type '$encrypt_type' not available or recognized. Continuing version preparation."
 	fi
 }
 

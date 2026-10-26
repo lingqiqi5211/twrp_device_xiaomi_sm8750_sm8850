@@ -70,6 +70,8 @@ on fs
     mount ext4 /dev/block/bootdevice/by-name/persist /persist noatime nosuid nodev barrier=1
     mount none /persist /mnt/vendor/persist bind
     install_keyring
+
+on property:twrp.storage.ready=1
     start vendor.qseecomd
 
 on post-fs
@@ -79,7 +81,7 @@ on post-fs
 on boot
     setprop sys.usb.config adb
 
-# qseecomd is up, so the HALs that reach a trustlet through it can follow.
+# qseecomd starts after storage.ready, so its listeners already imply readiness.
 on property:vendor.sys.listeners.registered=true
     start vendor.gatekeeper_default
 
@@ -105,10 +107,10 @@ on property:twrp.adsp.ready=true && property:vendor.sys.listeners.registered=tru
 # The haptics driver is one of the vendor modules, so the HAL has nothing to
 # talk to until they are in. lsmod on warsaw shows qcom_hv_haptics loaded from
 # vendor_dlkm.
-on property:twrp.variant.files_copied=1 && property:twrp.modules.loaded=true
+on property:twrp.variant.files_copied=1 && property:twrp.modules.loaded=true && property:twrp.storage.ready=1
     start odm.vibratorfeature-service
 
-on property:twrp.variant.files_copied=1
+on property:twrp.variant.files_copied=1 && property:twrp.storage.ready=1
     start odm.touch_report
 
 # One weaver per device, and exactly one VINTF declaration for it.
@@ -123,23 +125,20 @@ on property:twrp.variant.files_copied=1
 # replaces the first. Starting the wrong vendor's is worse than starting none:
 # the Thales chain on a device whose element is NXP hard-resets recovery a few
 # seconds in. variant-script names the vendor in ro.twrp.weaver.
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=thales
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=thales && property:twrp.storage.ready=1
     start odm.weaver-service
 
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=nxp
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=nxp && property:twrp.storage.ready=1
     start odm.weaver_nxp
 
 # piano has no element, so neither eSE service can answer for it. Its slots are
 # in the weaver GP TA and Xiaomi's own service is what reads them: the Thales
 # one asked the TA too, as a "backup", but returned the applet's failure and
 # TWRP got nothing but "Failed to get weaver key size".
-on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=mi
+on property:twrp.variant.files_copied=1 && property:ro.twrp.weaver=mi && property:twrp.storage.ready=1
     start odm.weaver_mi
 
 on property:twrp.modules.loaded=true
-    # KeyMint stays down until this has pointed the version properties at the
-    # installed system, so start it as early as the mapper nodes allow.
-    start odm.prepdecrypt
     # Load ADSP firmware for PMIC
     wait /sys/kernel/boot_adsp/boot
     write /sys/kernel/boot_adsp/boot 1
@@ -149,26 +148,15 @@ on property:twrp.modules.loaded=true
     start vendor.wait-adsp
     setprop twrp.firmware.mounted true
 
-# The stock vendor partition is first-stage-mounted over the ramdisk's own
-# /vendor, and TWRP mounts it again for the partition list and leaves it there,
-# hiding our libraries, our HAL binaries and our trustlets all at once. Bind
-# them somewhere the stock partition cannot reach while they are still
-# visible; hal-launch.sh takes all three from here.
+# Prepare installed-system version properties before starting KeyMint.
+on property:twrp.modules.loaded=true && property:twrp.storage.ready=1
+    start odm.prepdecrypt
+
+# wait-vendor.sh checks and pins the ramdisk's libraries and HAL binaries before
+# publishing twrp.vendor.visible. The independent /firmware mount stays available
+# even when recovery unmounts the stock vendor partition.
 on property:twrp.vendor.visible=1
-    mkdir /twrplib 0755 root root
-    mkdir /twrplib/vendor 0755 root root
-    mkdir /twrplib/vendorhw 0755 root root
-    mkdir /twrplib/vendorbin 0755 root root
-    mkdir /twrplib/odm 0755 root root
-    mkdir /twrplib/odmbin 0755 root root
-    mount none /vendor/lib64 /twrplib/vendor bind
-    mount none /vendor/lib64/hw /twrplib/vendorhw bind
-    mount none /vendor/bin/hw /twrplib/vendorbin bind
-    mount none /odm/lib64 /twrplib/odm bind
-    mount none /odm/bin/hw /twrplib/odmbin bind
     mount none /firmware /vendor/firmware_mnt bind
-    write /twrplib/.staged 1
-    setprop twrp.libs.staged 1
 
 service vendor.wait-adsp /system/bin/sh /system/bin/wait-adsp-ready.sh
     class hal
